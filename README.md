@@ -1,172 +1,210 @@
 # agent-mem
 
-**Persistent memory for AI coding agents** — capture what the agent does, compress it, and inject relevant context into future sessions.
+**Persistent memory for AI coding agents.**
 
-Inspired by systems like [claude-mem](https://github.com/thedotmack/claude-mem), but kept intentionally smaller so you can understand, extend, and own the whole pipeline.
+Capture what the agent does, compress it into structured observations, and inject only the context that matters into future sessions — without dumping entire histories into the prompt.
 
-## Features (v0.3)
+Lightweight alternative to systems like [claude-mem](https://github.com/thedotmack/claude-mem): small enough to read, fork, and own end-to-end.
 
-| Layer | What it does |
-|-------|----------------|
-| **Capture** | Record tool uses (Read, Edit, Bash, …) as structured observations |
-| **Compress** | Heuristic compressor (swap in an LLM later) |
-| **Store** | SQLite + FTS5 full-text search |
-| **Progressive disclosure** | Index → search → full detail only when needed |
-| **CLI + HTTP worker** | Use from scripts or local tools |
-| **Claude Code hooks** | SessionStart / PostToolUse / SessionEnd auto-capture |
-| **LLM compressor** | Anthropic / OpenRouter / OpenAI — falls back to heuristic |
+---
+
+## Why
+
+Coding agents forget everything between sessions. `agent-mem` gives them a durable project memory:
+
+1. **Capture** tool uses as they happen  
+2. **Compress** into short observations (heuristic or LLM)  
+3. **Recall** via progressive disclosure — index first, full detail on demand  
+
+Result: relevant past work comes back without burning tokens on noise.
+
+---
+
+## Features
+
+| Area | What you get |
+|------|----------------|
+| **Storage** | SQLite + FTS5 full-text search |
+| **Compression** | Offline heuristic, or Anthropic / OpenRouter / OpenAI |
+| **Recall** | 3-layer progressive disclosure |
+| **CLI** | `init`, session, capture, search, context, worker |
+| **HTTP worker** | Local API for tools and future MCP |
+| **Claude Code** | SessionStart / PostToolUse / SessionEnd hooks |
+
+---
+
+## Requirements
+
+- Node.js **20+**
+
+---
 
 ## Quick start
 
 ```bash
-# Requirements: Node.js 20+
 git clone https://github.com/Dikaaff/agent-mem.git
 cd agent-mem
 npm install
-npm run build
 
-# Initialize DB
+# Create local DB (~/.agent-mem/agent-mem.db)
 npx tsx src/cli.ts init
 
-# Start a session
+# Start a session and capture work
 SESSION=$(npx tsx src/cli.ts start-session -p my-project)
-echo "Session: $SESSION"
 
-# Capture some work
 npx tsx src/cli.ts capture -s "$SESSION" -p my-project -t Edit \
   --input "src/auth.ts" \
   --output "Fixed JWT expiry check"
 
-npx tsx src/cli.ts capture -s "$SESSION" -p my-project -t Bash \
-  --input "npm test" \
-  --output "All 12 tests passed"
-
-# End session with a short summary
 npx tsx src/cli.ts end-session -s "$SESSION" -p my-project \
   --request "Fix auth token expiry" \
-  --completed "JWT check fixed, tests green" \
+  --completed "JWT check fixed" \
   --next "Deploy to staging"
 
-# See priming context (what would be injected next session)
+# What the next session would see
 npx tsx src/cli.ts context -p my-project
 
-# Search (Layer 2)
+# Search, then fetch full detail
 npx tsx src/cli.ts search "JWT" -p my-project
-
-# Full detail (Layer 3)
 npx tsx src/cli.ts get 1
 ```
 
-## LLM compressor
-
-By default the compressor is **offline heuristic** (no API key needed).
-
-To enable LLM compression:
+Optional build (TypeScript + Claude Code hooks):
 
 ```bash
-# Anthropic (default provider when ANTHROPIC_API_KEY is set)
-export ANTHROPIC_API_KEY=sk-ant-...
-# optional:
-export AGENT_MEM_LLM_MODEL=claude-haiku-4-5-20251001
+npm run build
+```
 
-# Or OpenRouter
+---
+
+## Progressive disclosure
+
+| Layer | Command / API | Cost | Role |
+|-------|----------------|------|------|
+| **1 – Priming** | `context` | Cheap | Titles + recent summaries at session start |
+| **2 – Search** | `search` | Small | `{ id, title, type }` hits |
+| **3 – Detail** | `get <ids>` | On demand | Full narrative only for chosen IDs |
+
+Agents stay oriented without loading every past observation into context.
+
+---
+
+## LLM compressor
+
+Default is **offline heuristic** (no API key).
+
+Enable an LLM when you want richer titles and narratives:
+
+```bash
+# Anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# OpenRouter
 export OPENROUTER_API_KEY=sk-or-...
 export AGENT_MEM_LLM_PROVIDER=openrouter
 export AGENT_MEM_LLM_MODEL=anthropic/claude-haiku-4.5
 
-# Or any OpenAI-compatible endpoint
+# OpenAI-compatible
 export OPENAI_API_KEY=sk-...
 export AGENT_MEM_LLM_PROVIDER=openai
-export AGENT_MEM_LLM_BASE_URL=https://api.openai.com/v1
 export AGENT_MEM_LLM_MODEL=gpt-4o-mini
 ```
-
-Check status:
 
 ```bash
 npx tsx src/cli.ts llm-status
 ```
 
-Hooks and `capture` (without `--heuristic`) use `compressAuto()`:
-LLM when configured, heuristic on failure or if no key.
+`capture` and Claude Code hooks use `compressAuto()`: LLM when configured, heuristic on failure or if no key. Force heuristic with `--heuristic`.
 
-## Progressive disclosure
+---
 
-1. **Layer 1 – Priming** (`context`)  
-   Compact index of recent summaries + observation titles. Cheap to inject every session.
+## Claude Code hooks
 
-2. **Layer 2 – Search** (`search`)  
-   Returns `{ id, title, type }` only (~small token cost).
+| Event | Behavior |
+|-------|----------|
+| **SessionStart** | Open session, emit priming context |
+| **UserPromptSubmit** | Ensure session exists |
+| **PostToolUse** | Compress tool I/O → observation |
+| **Stop** | Turn boundary (ready for summaries) |
+| **SessionEnd** | Complete session |
 
-3. **Layer 3 – Detail** (`get`)  
-   Fetch full narrative only for the IDs you care about.
+```bash
+npm run build:hooks   # → plugin/hooks/*.js
+```
+
+See [`plugin/README.md`](plugin/README.md) for wiring into Claude Code.
+
+---
 
 ## HTTP worker
 
 ```bash
 npx tsx src/cli.ts worker
-# → http://127.0.0.1:37800
+# http://127.0.0.1:37800
 ```
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/health` | Health check |
-| GET | `/api/context/:project` | Priming text |
-| POST | `/api/sessions/start` | Start session |
-| POST | `/api/sessions/end` | End + optional summary |
-| POST | `/api/observations` | Capture tool use |
-| GET | `/api/search?q=&project=` | Search |
-| POST | `/api/observations/get` | `{ ids: number[] }` |
+| `GET` | `/health` | Health + data dir |
+| `GET` | `/api/context/:project` | Priming text |
+| `POST` | `/api/sessions/start` | Start session |
+| `POST` | `/api/sessions/end` | End + optional summary |
+| `POST` | `/api/observations` | Capture tool use |
+| `GET` | `/api/search?q=&project=` | Search |
+| `POST` | `/api/observations/get` | Full observations by id |
 
-## Claude Code hooks
+Override port with `AGENT_MEM_PORT`.
 
-Hooks live under `src/hooks/claude-code/` and are bundled to `plugin/hooks/*.js`.
+---
 
-```bash
-npm run build          # tsc + bundle hooks
-# or only hooks:
-npm run build:hooks
-```
+## Configuration
 
-| Event | What happens |
-|-------|----------------|
-| **SessionStart** | Open session, print priming context (Layer 1) |
-| **UserPromptSubmit** | Ensure session row exists |
-| **PostToolUse** | Compress tool I/O → save observation |
-| **Stop** | Turn boundary (ready for summary later) |
-| **SessionEnd** | Complete session + optional summary |
+| Variable | Purpose |
+|----------|---------|
+| `AGENT_MEM_DATA_DIR` | Data directory (default `~/.agent-mem`) |
+| `AGENT_MEM_PORT` | Worker port (default `37800`) |
+| `AGENT_MEM_LLM_PROVIDER` | `anthropic` \| `openrouter` \| `openai` |
+| `AGENT_MEM_LLM_API_KEY` | API key (or provider-specific env vars) |
+| `AGENT_MEM_LLM_MODEL` | Model id |
+| `AGENT_MEM_LLM_BASE_URL` | Custom OpenAI-compatible base URL |
+| `AGENT_MEM_LLM_TIMEOUT_MS` | Request timeout (default `30000`) |
 
-See `plugin/README.md` for local install notes.
+Also accepted: `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`.
+
+---
 
 ## Project layout
 
 ```
 src/
-  types/                # Shared types
-  db/                   # SQLite schema, client, store
-  services/             # Compressor, context builder, HTTP worker
-  hooks/                # Session + capture API
-    claude-code/        # Hook entrypoints for Claude Code
-  search/               # Progressive disclosure API
-  cli.ts
-  index.ts
+  types/           Shared types
+  db/              SQLite schema, client, store
+  services/        Compressor, LLM client, context, worker
+  hooks/           Capture API + Claude Code entrypoints
+  search/          Progressive disclosure API
+  cli.ts           CLI
+  index.ts         Library exports
 plugin/
-  hooks/                # Built JS hooks + hooks.json
+  hooks/           Built JS hooks + hooks.json
 scripts/
   build-hooks.mjs
 ```
 
-Data is stored in `~/.agent-mem/agent-mem.db` (override with `AGENT_MEM_DATA_DIR`).
+---
 
-## Roadmap (ideas)
+## Roadmap
 
-- [x] Claude Code hooks (basic)
-- [x] Real LLM compressor (Claude Haiku / OpenRouter / OpenAI)
-- [ ] MCP server for `search` / `get_observations`
-- [ ] Optional Chroma / vector search
-- [ ] Simple web viewer
-- [ ] Cursor / OpenCode adapters
+- [x] SQLite + FTS5 + progressive disclosure  
+- [x] CLI + HTTP worker  
+- [x] Claude Code hooks (basic)  
+- [x] LLM compressor (Anthropic / OpenRouter / OpenAI)  
+- [ ] MCP server (`search` / `get`)  
+- [ ] Optional vector search  
+- [ ] Simple web viewer  
+- [ ] Cursor / OpenCode adapters  
+
+---
 
 ## License
 
-Apache-2.0
+[Apache-2.0](LICENSE)
