@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "node",
+        "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/session-start.js"]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "command": "node",
+        "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/session-init.js"]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "command": "node",
+        "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use.js"]
+      }
+    ],
+    "Stop": [
+      {
+        "command": "node",
+        "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/stop.js"]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "command": "node",
+        "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/session-end.js"]
+      }
+    ]
+  }
+}
