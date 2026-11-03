@@ -16,3 +16,4 @@ export {
 } from "./services/compressor.js";
 export { loadLlmConfig } from "./services/llm.js";
 export { getDb, getDataDir, getDbPath } from "./db/client.js";
+export { startMcpServer } from "./mcp/server.js";

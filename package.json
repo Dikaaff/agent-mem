@@ -1,6 +1,6 @@
 {
   "name": "agent-mem",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Persistent memory for AI coding agents — capture, compress, and recall context across sessions",
   "type": "module",
   "main": "dist/index.js",
@@ -13,7 +13,8 @@
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
     "db:init": "tsx src/cli.ts init",
-    "worker": "tsx src/services/worker.ts"
+    "worker": "tsx src/services/worker.ts",
+    "mcp": "tsx src/mcp/server.ts"
   },
   "keywords": [
     "ai",
@@ -21,7 +22,8 @@
     "claude-code",
     "agent",
     "persistent-context",
-    "sqlite"
+    "sqlite",
+    "mcp"
   ],
   "author": "",
   "license": "Apache-2.0",
@@ -32,7 +34,8 @@
     "better-sqlite3": "^11.7.0",
     "commander": "^12.1.0",
     "express": "^4.21.2",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "@modelcontextprotocol/sdk": "^1.12.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
