@@ -14,7 +14,7 @@ const program = new Command();
 program
   .name("agent-mem")
   .description("Persistent memory for AI coding agents")
-  .version("0.1.0");
+  .version("0.4.0");
 
 program
   .command("init")
@@ -23,7 +23,7 @@ program
     getDbPath();
     import("./db/client.js").then(({ getDb }) => {
       getDb();
-      console.log("✓ Database ready at", getDbPath());
+      console.log("\u2713 Database ready at", getDbPath());
       console.log("  Data dir:", getDataDir());
     });
   });
@@ -60,7 +60,7 @@ program
           }
         : undefined
     );
-    console.log("✓ Session ended");
+    console.log("\u2713 Session ended");
   });
 
 program
@@ -91,7 +91,7 @@ program
           toolInput: opts.input,
           toolOutput: opts.output,
         });
-    console.log(`✓ Observation #${id} saved`);
+    console.log(`\u2713 Observation #${id} saved`);
   });
 
 program
@@ -111,7 +111,7 @@ program
     console.log(`  provider: ${cfg.provider}`);
     console.log(`  model:    ${cfg.model}`);
     console.log(`  baseUrl:  ${cfg.baseUrl || "(default)"}`);
-    console.log(`  apiKey:   ${cfg.apiKey.slice(0, 8)}…`);
+    console.log(`  apiKey:   ${cfg.apiKey.slice(0, 8)}\u2026`);
   });
 
 program
@@ -155,6 +155,14 @@ program
   .description("Start local HTTP worker")
   .action(async () => {
     await import("./services/worker.js");
+  });
+
+program
+  .command("mcp")
+  .description("Start MCP server (stdio) for agent tools")
+  .action(async () => {
+    const { startMcpServer } = await import("./mcp/server.js");
+    await startMcpServer();
   });
 
 program.parse();
