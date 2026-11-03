@@ -27,9 +27,10 @@ Result: relevant past work comes back without burning tokens on noise.
 | **Storage** | SQLite + FTS5 full-text search |
 | **Compression** | Offline heuristic, or Anthropic / OpenRouter / OpenAI |
 | **Recall** | 3-layer progressive disclosure |
-| **CLI** | `init`, session, capture, search, context, worker |
-| **HTTP worker** | Local API for tools and future MCP |
+| **CLI** | `init`, session, capture, search, context, worker, mcp |
+| **HTTP worker** | Local API for tools and MCP |
 | **Claude Code** | SessionStart / PostToolUse / SessionEnd hooks |
+| **MCP server** | `search_memory`, `get_observations`, `get_context`, `get_timeline` |
 
 ---
 
@@ -157,6 +158,42 @@ Override port with `AGENT_MEM_PORT`.
 
 ---
 
+## MCP server
+
+Expose memory tools to any MCP-compatible agent (Claude Code, Cursor, etc.).
+
+```bash
+npx tsx src/cli.ts mcp
+# or
+npm run mcp
+```
+
+### Tools
+
+| Tool | Layer | Purpose |
+|------|-------|---------|
+| `search_memory` | 2 | Search observations → `{ id, title, type }` |
+| `get_observations` | 3 | Full narrative by id list |
+| `get_context` | 1 | Priming text for a project |
+| `get_timeline` | 1–2 | Recent summaries + observations (JSON) |
+
+### Claude Code / MCP config example
+
+```json
+{
+  "mcpServers": {
+    "agent-mem": {
+      "command": "npx",
+      "args": ["tsx", "/absolute/path/to/agent-mem/src/cli.ts", "mcp"]
+    }
+  }
+}
+```
+
+Typical agent flow: `get_context` → `search_memory` → `get_observations` for only the ids that matter.
+
+---
+
 ## Configuration
 
 | Variable | Purpose |
@@ -182,6 +219,7 @@ src/
   services/        Compressor, LLM client, context, worker
   hooks/           Capture API + Claude Code entrypoints
   search/          Progressive disclosure API
+  mcp/             MCP server (stdio)
   cli.ts           CLI
   index.ts         Library exports
 plugin/
@@ -198,7 +236,7 @@ scripts/
 - [x] CLI + HTTP worker  
 - [x] Claude Code hooks (basic)  
 - [x] LLM compressor (Anthropic / OpenRouter / OpenAI)  
-- [ ] MCP server (`search` / `get`)  
+- [x] MCP server (`search_memory` / `get_observations` / `get_context` / `get_timeline`)  
 - [ ] Optional vector search  
 - [ ] Simple web viewer  
 - [ ] Cursor / OpenCode adapters  
